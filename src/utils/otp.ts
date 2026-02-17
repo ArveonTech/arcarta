@@ -29,8 +29,6 @@ export const requestOTP = async ({
   secret: string;
   email: string;
 }): Promise<OTPReturn> => {
-  const id: number = parseInt(userId);
-
   try {
     const now = new Date();
     const expiredAt = toPgTimestamp(new Date(now.getTime() + 60 * 1000));
@@ -39,15 +37,15 @@ export const requestOTP = async ({
       await pool.query<User>("Select * from auth.users where id=$1", [userId])
     ).rows[0];
 
-    if (user?.is_verified) {
-      return { statusOTP: "false", message: "The account has been verifieds" };
+    if (!user) {
+      return { statusOTP: "false", message: "User not found" };
     }
 
     const resultGenerateTokenOTP = await generateTokenOTP(secret);
 
     const resultAddTokenInDB = await pool.query(
       "INSERT INTO auth.otp_codes (user_id, otp, otp_expired_at, created_at) VALUES ($1, $2, $3, $4)",
-      [id, resultGenerateTokenOTP, expiredAt, toPgTimestamp(new Date())],
+      [userId, resultGenerateTokenOTP, expiredAt, toPgTimestamp(new Date())],
     );
 
     if (resultAddTokenInDB.rowCount === 0)

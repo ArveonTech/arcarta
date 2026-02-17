@@ -15,7 +15,14 @@ import {
   ValidateDataReturn,
 } from "../types/auth-types";
 import { pool } from "../database/db";
-import { validateUser } from "../utils/validate-user";
+import { validatePassword, validateUser } from "../utils/validate-user";
+import { findUserByEmail, findUserById, getProfile } from "./user.service";
+import { verifyOTP } from "../utils/otp";
+import {
+  CreateVerifiedAccountResult,
+  markAccountActionVerified,
+} from "../types/user-type";
+import { generateSecret } from "otplib";
 
 if (
   !process.env.CLIENT_ID ||
@@ -98,6 +105,7 @@ export const validateDataUserSetPassword = (
       status: "error",
       code: 404,
       message: "Data register not found",
+      data: null,
     };
 
   if (dataUser.status !== "register")
@@ -105,6 +113,7 @@ export const validateDataUserSetPassword = (
       status: "error",
       code: 400,
       message: "Invalid status register",
+      data: null,
     };
 
   const dataUserRegister = dataUser.user;
@@ -117,6 +126,7 @@ export const validateDataUserSetPassword = (
       status: "error",
       code: 404,
       message: "Data not found",
+      data: null,
     };
 
   // validate user
@@ -130,6 +140,7 @@ export const validateDataUserSetPassword = (
       status: "error",
       code: 400,
       message: errorMsgValidateUser,
+      data: null,
     };
   }
 
@@ -137,7 +148,85 @@ export const validateDataUserSetPassword = (
     status: "success",
     code: 200,
     message: "Success",
+    data: null,
   };
+};
+
+export const addUserAccountVerified = async (
+  dataUser: markAccountActionVerified,
+): Promise<CreateVerifiedAccountResult> => {
+  try {
+    const { full_name, email, password } = dataUser;
+
+    const secret: string = generateSecret();
+
+    await pool.query("BEGIN");
+    const newAccountUser = (
+      await pool.query<User>(
+        "insert into auth.users (password,email,is_verified,role,secret) values ($1,$2,$3,$4,$5) returning *",
+        [password, email, false, "user", secret],
+      )
+    ).rows[0];
+
+    if (!newAccountUser)
+      throw new Error("Failed to create verification account");
+
+    const newAccountProfile = (
+      await pool.query<Profile>(
+        "insert into auth.profiles (user_id,full_name) values ($1,$2) returning *",
+        [newAccountUser.id, full_name],
+      )
+    ).rows[0];
+
+    if (!newAccountProfile)
+      throw new Error("Failed to create verification account");
+
+    await pool.query("COMMIT");
+    return { user: newAccountUser, profile: newAccountProfile };
+  } catch (error) {
+    await pool.query("ROLLBACK");
+    console.info(error);
+    throw new Error(error instanceof Error ? error.message : "Error login");
+  }
+};
+
+export const addUserAccountGoogle = async (
+  password: string,
+  email: string,
+  full_name: string,
+) => {
+  try {
+    const secret: string = generateSecret();
+
+    await pool.query("BEGIN");
+
+    const userDBComplate = (
+      await pool.query<User>(
+        "insert into auth.users (password,email,is_verified,role,secret) values ($1,$2,$3,$4,$5) returning *",
+        [password, email, false, "user", secret],
+      )
+    ).rows[0];
+
+    if (!userDBComplate) throw new Error("Failed to create account");
+
+    const newAccountProfile = (
+      await pool.query<Profile>(
+        "insert into auth.profiles (user_id,full_name) values ($1,$2,$3) returning *",
+        [userDBComplate.id, full_name],
+      )
+    ).rows[0];
+
+    if (!newAccountProfile) throw new Error("Failed to create account");
+
+    await pool.query("COMMIT");
+    return { user: userDBComplate, profile: newAccountProfile };
+  } catch (error) {
+    await pool.query("ROLLBACK");
+    console.info(error);
+    throw new Error(
+      error instanceof Error ? error.message : "Error add user google",
+    );
+  }
 };
 
 export const getPayloadJWT = async (newAccountUser: User) => {
@@ -178,6 +267,7 @@ export const validateDataRegister = (
       status: "error",
       code: 400,
       message: "Failed register",
+      data: null,
     };
 
   // validate user
@@ -188,6 +278,7 @@ export const validateDataRegister = (
       status: "error",
       code: 400,
       message: errorMsgValidateUser,
+      data: null,
     };
   }
 
@@ -195,5 +286,158 @@ export const validateDataRegister = (
     status: "success",
     code: 200,
     message: "Success",
+    data: null,
+  };
+};
+
+export const validateDataLogin = async (dataUser: {
+  email: string;
+  password: string;
+}): Promise<ValidateDataReturn> => {
+  const dataUserDB = await findUserByEmail(dataUser.email);
+
+  if (dataUser?.password !== dataUserDB.password)
+    return {
+      status: "error",
+      code: 401,
+      message: "Wrong password",
+      data: null,
+    };
+
+  const profile = await getProfile(dataUserDB.id);
+
+  // account is already but not verified
+  if (dataUserDB.is_verified === false) {
+    return {
+      status: "pending",
+      code: 200,
+      message: "Account exists but not verified. Please verify your email.",
+      data: {
+        user: dataUserDB,
+        profile,
+      },
+    };
+  }
+
+  return {
+    status: "success",
+    code: 200,
+    message: "Validated data",
+    data: {
+      user: dataUserDB,
+      profile,
+    },
+  };
+};
+
+export const verifyOTPUser = async (dataUser: {
+  id: string;
+  full_name: string;
+  email: string;
+  token: string;
+}): Promise<ValidateDataReturn> => {
+  if (!dataUser.id || !dataUser.full_name || !dataUser.email || !dataUser.token)
+    return {
+      status: "error",
+      code: 404,
+      message: "Data verify otp not found",
+      data: null,
+    };
+
+  const user = await findUserById(dataUser.id);
+  const profile = (
+    await pool.query<Profile>("Select * from auth.profiles where user_id=$1", [
+      user.id,
+    ])
+  ).rows[0];
+
+  const userDBComplate = await verifyOTP(user.id, dataUser.token);
+
+  if (!userDBComplate.success)
+    return {
+      status: "error",
+      code: 400,
+      message: userDBComplate.message,
+      data: null,
+    };
+
+  if (!profile)
+    return {
+      status: "error",
+      code: 400,
+      message: "Failed account verification",
+      data: null,
+    };
+
+  return {
+    status: "success",
+    code: 200,
+    message: "Verification account success",
+    data: {
+      profile,
+      user,
+    },
+  };
+};
+
+export const setPassword = async (dataUser: {
+  id: string;
+  full_name: string;
+  email: string;
+  otp: boolean;
+  avatar: string;
+  newPassword: string;
+}): Promise<ValidateDataReturn> => {
+  if (
+    !dataUser.id ||
+    !dataUser.full_name ||
+    !dataUser.email ||
+    !dataUser.otp ||
+    !dataUser.avatar ||
+    !dataUser.newPassword
+  )
+    return {
+      status: "error",
+      code: 404,
+      message: "Data set password not found",
+      data: null,
+    };
+
+  const errorMsgValidateUser = validatePassword(dataUser.newPassword);
+  if (errorMsgValidateUser) {
+    return {
+      status: "error",
+      code: 400,
+      message: errorMsgValidateUser,
+      data: null,
+    };
+  }
+
+  const user = await findUserByEmail(dataUser.email);
+  const profile = await getProfile(user.id);
+
+  const resultUpdateForgotPassword = (
+    await pool.query(
+      "update auth.users set password=$1 where id=$2 returning *",
+      [dataUser.newPassword, user.id],
+    )
+  ).rows[0];
+
+  if (!resultUpdateForgotPassword)
+    return {
+      status: "error",
+      code: 400,
+      message: "Error set password",
+      data: null,
+    };
+
+  return {
+    status: "success",
+    code: 200,
+    message: "Verification account success",
+    data: {
+      profile,
+      user,
+    },
   };
 };

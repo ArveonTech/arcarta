@@ -3,8 +3,11 @@ import {
   authenticateGoogleUser,
   getGoogleUserFromCode,
   getPayloadJWT,
+  setPassword,
+  validateDataLogin,
   validateDataRegister,
   validateDataUserSetPassword,
+  verifyOTPUser,
 } from "../services/auth.service";
 
 import { JWTPayload, Profile, User } from "../types/auth-types";
@@ -12,11 +15,15 @@ import { createAccessToken, createRefreshToken } from "../utils/auth-token";
 import { AuthError } from "../middlewares/errorHandler";
 import { pool } from "../database/db";
 import {
+  findUserByEmail,
+  findUserById,
+  getProfile,
+} from "../services/user.service";
+import {
   addUserAccountGoogle,
   addUserAccountVerified,
-  findUserById,
-} from "../services/user.service";
-import { requestOTP, verifyOTP } from "../utils/otp";
+} from "../services/auth.service";
+import { requestOTP } from "../utils/otp";
 
 export const handleGoogleCallback = async (
   req: Request,
@@ -149,16 +156,13 @@ export const handleSetPassword = async (
       },
     });
   } catch (error) {
-    if (error instanceof TypeError) {
-      next(
-        new AuthError({
-          message: `Error set password: ${error.message}`,
-          statusCode: 400,
-        }),
-      );
-    } else {
-      next(new AuthError({ message: `Error set password: `, statusCode: 400 }));
-    }
+    console.info(error);
+    next(
+      new AuthError({
+        message: error instanceof Error ? error.message : "Error set password",
+        statusCode: 400,
+      }),
+    );
   }
 };
 
@@ -229,21 +233,18 @@ export const handleRegister = async (
         "Your account has been successfully created.Please verify the email to continue.",
       data: {
         id: user.id,
-        username: profile.full_name,
+        full_name: profile.full_name,
         email: user.email,
       },
     });
   } catch (error) {
-    if (error instanceof TypeError) {
-      next(
-        new AuthError({
-          message: `Error register user: ${error.message}`,
-          statusCode: 400,
-        }),
-      );
-    } else {
-      next(new AuthError({ message: `Error register user`, statusCode: 400 }));
-    }
+    console.info(error);
+    next(
+      new AuthError({
+        message: error instanceof Error ? error.message : "Error register",
+        statusCode: 400,
+      }),
+    );
   }
 };
 
@@ -289,21 +290,13 @@ export const handleRequestOTPRegister = async (
     });
   } catch (error) {
     console.info(error);
-    if (error instanceof TypeError) {
-      next(
-        new AuthError({
-          message: `Error request otp register: ${error.message}`,
-          statusCode: 400,
-        }),
-      );
-    } else {
-      next(
-        new AuthError({
-          message: `Error request otp register`,
-          statusCode: 400,
-        }),
-      );
-    }
+    next(
+      new AuthError({
+        message:
+          error instanceof Error ? error.message : "Error request otp register",
+        statusCode: 400,
+      }),
+    );
   }
 };
 
@@ -315,44 +308,37 @@ export const handleVerifyOTPRegister = async (
   try {
     const { dataUser } = req.body;
 
-    if (
-      !dataUser.id ||
-      !dataUser.full_name ||
-      !dataUser.email ||
-      !dataUser.token
-    ) {
-      return res.status(404).json({
+    const { status, code, message, data } = await verifyOTPUser({
+      id: dataUser.id,
+      email: dataUser.email,
+      full_name: dataUser.full_name,
+      token: dataUser.token,
+    });
+
+    if (status === "error")
+      return res.status(code).json({
+        status: status,
+        code: code,
+        message: message,
+      });
+
+    if (!data) {
+      return res.status(400).json({
         status: "error",
-        code: 404,
-        message: "Data verify otp not found",
+        code: 400,
+        message: "Data login not found ",
       });
     }
 
-    const user = await findUserById(dataUser.id);
-    const profile = (
-      await pool.query<Profile>(
-        "Select * from auth.profiles where user_id=$1",
-        [user.id],
-      )
-    ).rows[0];
-
-    const userDBComplate = await verifyOTP(user.id, dataUser.token);
-
-    if (!userDBComplate.success)
+    if (!data.user || !data.profile) {
       return res.status(400).json({
         status: "error",
         code: 400,
-        message: userDBComplate.message,
+        message: "Data user not found ",
       });
+    }
 
-    if (!profile)
-      return res.status(400).json({
-        status: "error",
-        code: 400,
-        message: "Failed account verification",
-      });
-
-    const payloadJWT = await getPayloadJWT(user);
+    const payloadJWT = await getPayloadJWT(data.user);
 
     const accessToken = createAccessToken({ payload: payloadJWT });
     const refreshToken = createRefreshToken({ payload: payloadJWT });
@@ -371,10 +357,10 @@ export const handleVerifyOTPRegister = async (
       message: "OTP register success",
       data: {
         otp: true,
-        id: user.id,
-        full_name: profile.full_name,
-        email: user.email,
-        avatar: profile.avatar,
+        id: data.user.id,
+        full_name: data.profile.full_name,
+        email: data.user.email,
+        avatar: data.profile.avatar,
       },
       tokens: {
         accessToken,
@@ -382,20 +368,518 @@ export const handleVerifyOTPRegister = async (
     });
   } catch (error) {
     console.info(error);
-    if (error instanceof TypeError) {
-      next(
-        new AuthError({
-          message: `Error verify otp register: ${error.message}`,
-          statusCode: 400,
-        }),
-      );
-    } else {
-      next(
-        new AuthError({
-          message: `Error verify otp register`,
-          statusCode: 400,
-        }),
-      );
+    next(
+      new AuthError({
+        message:
+          error instanceof Error ? error.message : "Error verify register",
+        statusCode: 400,
+      }),
+    );
+  }
+};
+
+export const handleLogin = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const { dataUser } = req.body;
+
+    const { status, code, message, data } = await validateDataLogin({
+      email: dataUser.email,
+      password: dataUser.password,
+    });
+
+    if (status === "error")
+      return res.status(code).json({
+        status: status,
+        code: code,
+        message: message,
+      });
+
+    if (!data) {
+      return res.status(400).json({
+        status: "error",
+        code: 400,
+        message: "Data login not found ",
+      });
     }
+
+    if (!data.user || !data.profile) {
+      return res.status(400).json({
+        status: "error",
+        code: 400,
+        message: "Data user not found ",
+      });
+    }
+
+    if (status === "pending")
+      return res.status(code).json({
+        status: status,
+        code: code,
+        message: message,
+        data: {
+          id: data.user.id,
+          full_name: data.profile.full_name,
+          email: data.user.email,
+        },
+      });
+
+    const payloadJWT = await getPayloadJWT(data.user);
+
+    const accessToken = createAccessToken({ payload: payloadJWT });
+    const refreshToken = createRefreshToken({ payload: payloadJWT });
+
+    res.cookie("refresh-token", refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: (process.env.SAMESITE as "none" | "lax" | "strict") || "none",
+      maxAge: 1000 * 60 * 60 * 168,
+      path: "/",
+    });
+
+    res.status(202).json({
+      status: "success",
+      code: 202,
+      message: "OTP register success",
+      data: {
+        id: data.user.id,
+        full_name: data.profile.full_name,
+        email: data.user.email,
+        avatar: data.profile.avatar,
+      },
+      tokens: {
+        accessToken,
+      },
+    });
+  } catch (error) {
+    next(
+      new AuthError({
+        message: error instanceof Error ? error.message : "Error login",
+        statusCode: 400,
+      }),
+    );
+  }
+};
+
+export const handleRequestOTPLogin = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const { dataUser } = req.body;
+
+    if (!dataUser.id || !dataUser.full_name || !dataUser.email) {
+      return res.status(404).json({
+        status: "error",
+        code: 404,
+        message: "Data request otp not found",
+      });
+    }
+
+    const user = await findUserById(dataUser.id);
+
+    const { statusOTP, message } = await requestOTP({
+      userId: user.id,
+      secret: user.secret,
+      email: user.email,
+    });
+
+    if (statusOTP === "false") {
+      return res.status(400).json({
+        status: "error",
+        code: 400,
+        message: message,
+      });
+    }
+
+    res.status(202).json({
+      status: "success",
+      code: 202,
+      message: statusOTP,
+      data: {
+        otp: true,
+      },
+    });
+  } catch (error) {
+    console.info(error);
+    next(
+      new AuthError({
+        message:
+          error instanceof Error ? error.message : "Error request otp login",
+        statusCode: 400,
+      }),
+    );
+  }
+};
+
+export const handleVerifyOTPLogin = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const { dataUser } = req.body;
+
+    const { status, code, message, data } = await verifyOTPUser({
+      id: dataUser.id,
+      email: dataUser.email,
+      full_name: dataUser.full_name,
+      token: dataUser.token,
+    });
+
+    if (status === "error")
+      return res.status(code).json({
+        status: status,
+        code: code,
+        message: message,
+      });
+
+    if (!data) {
+      return res.status(400).json({
+        status: "error",
+        code: 400,
+        message: "Data login not found ",
+      });
+    }
+
+    if (!data.user || !data.profile) {
+      return res.status(400).json({
+        status: "error",
+        code: 400,
+        message: "Data user not found ",
+      });
+    }
+
+    const payloadJWT = await getPayloadJWT(data.user);
+
+    const accessToken = createAccessToken({ payload: payloadJWT });
+    const refreshToken = createRefreshToken({ payload: payloadJWT });
+
+    res.cookie("refresh-token", refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: (process.env.SAMESITE as "none" | "lax" | "strict") || "none",
+      maxAge: 1000 * 60 * 60 * 168,
+      path: "/",
+    });
+
+    res.status(202).json({
+      status: "success",
+      code: 202,
+      message: "OTP register success",
+      data: {
+        otp: true,
+        id: data.user.id,
+        full_name: data.profile.full_name,
+        email: data.user.email,
+        avatar: data.profile.avatar,
+      },
+      tokens: {
+        accessToken,
+      },
+    });
+  } catch (error) {
+    console.info(error);
+    next(
+      new AuthError({
+        message:
+          error instanceof Error ? error.message : "Error verify register",
+        statusCode: 400,
+      }),
+    );
+  }
+};
+
+export const handleForgotPassword = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const { dataUser } = req.body;
+
+    if (!dataUser.email)
+      return res.status(404).json({
+        status: "error",
+        code: 404,
+        message: "User not found",
+      });
+
+    const dataUserDB = await findUserByEmail(dataUser.email);
+    const profile = await getProfile(dataUserDB.id);
+
+    res.status(200).json({
+      status: "pending",
+      code: 200,
+      message: "Email is already",
+      data: {
+        id: dataUserDB.id,
+        full_name: profile.full_name,
+        email: dataUserDB.email,
+      },
+    });
+  } catch (error) {
+    next(
+      new AuthError({
+        message:
+          error instanceof Error
+            ? error.message
+            : "Error request forgot password",
+        statusCode: 400,
+      }),
+    );
+  }
+};
+
+export const handleRequestOTPForgotPassword = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const { dataUser } = req.body;
+
+    if (!dataUser.email)
+      return res.status(404).json({
+        status: "error",
+        code: 404,
+        message: "User not found",
+      });
+
+    const dataUserDB = await findUserByEmail(dataUser.email);
+
+    const { statusOTP, message } = await requestOTP({
+      userId: dataUserDB.id,
+      secret: dataUserDB.secret,
+      email: dataUserDB.email,
+    });
+
+    if (statusOTP === "false") {
+      return res.status(400).json({
+        status: "error",
+        code: 400,
+        message: message,
+      });
+    }
+
+    res.status(202).json({
+      status: "success",
+      code: 202,
+      message: statusOTP,
+      data: {
+        otp: true,
+      },
+    });
+  } catch (error) {
+    next(
+      new AuthError({
+        message:
+          error instanceof Error
+            ? error.message
+            : "Error request otp forgot password",
+        statusCode: 400,
+      }),
+    );
+  }
+};
+
+export const handleVerifyOTPForgotPassword = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const { dataUser } = req.body;
+
+    const { status, code, message, data } = await verifyOTPUser({
+      id: dataUser.id,
+      email: dataUser.email,
+      full_name: dataUser.full_name,
+      token: dataUser.token,
+    });
+
+    if (status === "error")
+      return res.status(code).json({
+        status: status,
+        code: code,
+        message: message,
+      });
+
+    if (!data) {
+      return res.status(400).json({
+        status: "error",
+        code: 400,
+        message: "Data login not found ",
+      });
+    }
+
+    if (!data.user || !data.profile) {
+      return res.status(400).json({
+        status: "error",
+        code: 400,
+        message: "Data user not found ",
+      });
+    }
+
+    res.status(200).json({
+      status: "pending",
+      code: 200,
+      message: "OTP forgot password success",
+      data: {
+        otp: true,
+        id: data.user.id,
+        full_name: data.profile.full_name,
+        email: data.user.email,
+        avatar: data.profile.avatar,
+      },
+    });
+  } catch (error) {
+    next(
+      new AuthError({
+        message:
+          error instanceof Error
+            ? error.message
+            : "Error verify otp forgot password",
+        statusCode: 400,
+      }),
+    );
+  }
+};
+
+export const handleSetPasswordForgotPassword = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const { dataUser } = req.body;
+
+    const { status, code, message, data } = await setPassword(dataUser);
+
+    if (status === "error")
+      return res.status(code).json({
+        status: status,
+        code: code,
+        message: message,
+      });
+
+    if (!data) {
+      return res.status(400).json({
+        status: "error",
+        code: 400,
+        message: "Data login not found ",
+      });
+    }
+
+    if (!data.user || !data.profile) {
+      return res.status(400).json({
+        status: "error",
+        code: 400,
+        message: "Data login not found ",
+      });
+    }
+
+    const payloadJWT = await getPayloadJWT(data.user);
+
+    const accessToken = createAccessToken({ payload: payloadJWT });
+    const refreshToken = createRefreshToken({ payload: payloadJWT });
+
+    res.cookie("refresh-token", refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: (process.env.SAMESITE as "none" | "lax" | "strict") || "none",
+      maxAge: 1000 * 60 * 60 * 168,
+      path: "/",
+    });
+
+    res.status(200).json({
+      status: "success",
+      code: 200,
+      message: "Update password success",
+      data: {
+        id: data.user.id,
+        full_name: data.profile.full_name,
+        email: data.user.email,
+        avatar: data.profile.avatar,
+      },
+      tokens: {
+        accessToken,
+      },
+    });
+  } catch (error) {
+    next(
+      new AuthError({
+        message:
+          error instanceof Error
+            ? error.message
+            : "Error set password forgot password",
+        statusCode: 400,
+      }),
+    );
+  }
+};
+
+export const handleRefresh = (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const { accessToken, refreshToken, status } = req;
+
+    if (status === "refresh")
+      res.cookie("refresh-token", refreshToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: (process.env.SAMESITE as "none" | "lax" | "strict") || "none",
+        maxAge: 1000 * 60 * 60 * 168,
+        path: "/",
+      });
+
+    res.status(202).json({
+      status: "success",
+      code: 202,
+      message: "Refresh token success",
+      tokens: status === "refresh" ? { accessToken } : undefined,
+    });
+  } catch (error) {
+    next(
+      new AuthError({
+        message: error instanceof Error ? error.message : "Error refresh",
+        statusCode: 400,
+      }),
+    );
+  }
+};
+
+export const handleLogout = (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    res.clearCookie("refresh-token", {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: (process.env.SAMESITE as "none" | "lax" | "strict") || "none",
+      maxAge: 1000 * 60 * 60 * 168,
+      path: "/",
+    });
+
+    res.status(204).json({
+      status: "success",
+      code: 204,
+      message: "Logout success",
+    });
+  } catch (error) {
+    next(
+      new AuthError({
+        message: error instanceof Error ? error.message : "Error logout",
+        statusCode: 400,
+      }),
+    );
   }
 };

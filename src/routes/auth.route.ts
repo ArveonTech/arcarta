@@ -2,12 +2,22 @@ import express from "express";
 import { OAuth2Client } from "google-auth-library/build/src/auth/oauth2client";
 import { AuthError } from "../middlewares/errorHandler";
 import {
+  handleForgotPassword,
   handleGoogleCallback,
+  handleLogin,
+  handleLogout,
+  handleRefresh,
   handleRegister,
+  handleRequestOTPForgotPassword,
+  handleRequestOTPLogin,
   handleRequestOTPRegister,
   handleSetPassword,
+  handleSetPasswordForgotPassword,
+  handleVerifyOTPForgotPassword,
+  handleVerifyOTPLogin,
   handleVerifyOTPRegister,
 } from "../controllers/auth.controller";
+import { verifyToken } from "../middlewares/auth.middleware";
 
 const app = express();
 app.use(express.json());
@@ -62,5 +72,28 @@ authRoute.post(`/request-otp/register`, handleRequestOTPRegister);
 authRoute.post(`/verify-otp/register`, handleVerifyOTPRegister);
 
 // Login
+authRoute.post(`/login`, handleLogin);
+
+authRoute.post(`/request-otp/login`, handleRequestOTPLogin);
+
+authRoute.post(`/verify-otp/login`, handleVerifyOTPLogin);
+
+// forgot password
+authRoute.post(`/forgot-password`, handleForgotPassword);
+
+authRoute.post(`/request-otp/forgot-password`, handleRequestOTPForgotPassword);
+
+authRoute.post(`/verify-otp/forgot-password`, handleVerifyOTPForgotPassword);
+
+authRoute.post(
+  `/set-password/forgot-password`,
+  handleSetPasswordForgotPassword,
+);
+
+// refresh
+authRoute.get(`/refresh`, verifyToken, handleRefresh);
+
+// logout
+authRoute.post(`/logout`, verifyToken, handleLogout);
 
 export default authRoute;

@@ -52,9 +52,13 @@ export interface AuthenticateGoogleUserReturn {
 }
 
 export interface ValidateDataReturn {
-  status: "success" | "error";
+  status: "success" | "error" | "pending";
   code: number;
   message: string;
+  data: {
+    user: User;
+    profile: Profile;
+  } | null;
 }
 
 export type DataUserRegister = {
