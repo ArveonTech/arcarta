@@ -1,5 +1,5 @@
 import jwt from "jsonwebtoken";
-import { createAccessToken } from "../utils/auth-token.js";
+import { createAccessToken } from "../utils/auth-token";
 
 const accessKey = process.env.ACCESS_SECRET_KEY;
 const refreshKey = process.env.REFRESH_SECRET_KEY;

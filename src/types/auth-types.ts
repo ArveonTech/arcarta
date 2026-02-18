@@ -66,3 +66,11 @@ export type DataUserRegister = {
   full_name: string;
   password: string;
 };
+
+export type OTPCodes = {
+  id: number;
+  user_id: number;
+  otp: string;
+  otp_expired_at: Date;
+  created_at: Date;
+};

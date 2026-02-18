@@ -417,7 +417,7 @@ export const setPassword = async (dataUser: {
   const profile = await getProfile(user.id);
 
   const resultUpdateForgotPassword = (
-    await pool.query(
+    await pool.query<User>(
       "update auth.users set password=$1 where id=$2 returning *",
       [dataUser.newPassword, user.id],
     )
@@ -434,7 +434,7 @@ export const setPassword = async (dataUser: {
   return {
     status: "success",
     code: 200,
-    message: "Verification account success",
+    message: "Set password success",
     data: {
       profile,
       user,

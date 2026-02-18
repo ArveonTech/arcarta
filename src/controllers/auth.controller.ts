@@ -333,7 +333,7 @@ export const handleVerifyOTPRegister = async (
     if (!data.user || !data.profile) {
       return res.status(400).json({
         status: "error",
-        code: 400,
+        code: 404,
         message: "Data user not found ",
       });
     }
@@ -409,7 +409,7 @@ export const handleLogin = async (
     if (!data.user || !data.profile) {
       return res.status(400).json({
         status: "error",
-        code: 400,
+        code: 404,
         message: "Data user not found ",
       });
     }
@@ -442,7 +442,7 @@ export const handleLogin = async (
     res.status(202).json({
       status: "success",
       code: 202,
-      message: "OTP register success",
+      message: "Login success",
       data: {
         id: data.user.id,
         full_name: data.profile.full_name,
@@ -548,7 +548,7 @@ export const handleVerifyOTPLogin = async (
     if (!data.user || !data.profile) {
       return res.status(400).json({
         status: "error",
-        code: 400,
+        code: 404,
         message: "Data user not found ",
       });
     }
@@ -569,7 +569,7 @@ export const handleVerifyOTPLogin = async (
     res.status(202).json({
       status: "success",
       code: 202,
-      message: "OTP register success",
+      message: "OTP verify success",
       data: {
         otp: true,
         id: data.user.id,
@@ -719,7 +719,7 @@ export const handleVerifyOTPForgotPassword = async (
     if (!data.user || !data.profile) {
       return res.status(400).json({
         status: "error",
-        code: 400,
+        code: 404,
         message: "Data user not found ",
       });
     }

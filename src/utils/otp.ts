@@ -3,7 +3,7 @@ import { sendMeessage } from "./email";
 import { pool } from "../database/db";
 import { AuthError } from "../middlewares/errorHandler";
 import { toPgTimestamp } from "./to-postgres-timestamp";
-import { User } from "../types/auth-types";
+import { OTPCodes, User } from "../types/auth-types";
 
 export const generateTokenOTP = async (secret: string) => {
   const token = await generate({ secret });
@@ -43,7 +43,7 @@ export const requestOTP = async ({
 
     const resultGenerateTokenOTP = await generateTokenOTP(secret);
 
-    const resultAddTokenInDB = await pool.query(
+    const resultAddTokenInDB = await pool.query<OTPCodes>(
       "INSERT INTO auth.otp_codes (user_id, otp, otp_expired_at, created_at) VALUES ($1, $2, $3, $4)",
       [userId, resultGenerateTokenOTP, expiredAt, toPgTimestamp(new Date())],
     );
@@ -91,11 +91,12 @@ export const verifyOTP = async (
     return { success: false, message: "OTP invalid" };
   }
 
-  await pool.query(`UPDATE auth.users SET is_verified = true WHERE id = $1`, [
-    userId,
-  ]);
+  await pool.query<User>(
+    `UPDATE auth.users SET is_verified = true WHERE id = $1`,
+    [userId],
+  );
 
-  await pool.query(
+  await pool.query<OTPCodes>(
     `DELETE FROM auth.otp_codes WHERE user_id = $1 AND otp = $2`,
     [userId, otpInput],
   );

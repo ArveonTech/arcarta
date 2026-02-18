@@ -1,5 +1,5 @@
 import jwt from "jsonwebtoken";
-import { authenticateToken } from "../helpers/authenticate-token.js";
+import { authenticateToken } from "../helpers/authenticate-token";
 import { type Request, type Response, type NextFunction } from "express";
 
 interface CustomRequestVerifyToken extends Request {
