@@ -4,6 +4,7 @@ import cors from "cors";
 import { type Request, type Response, type NextFunction } from "express";
 import authRoute from "./routes/auth.route";
 import userRoute from "./routes/user.route";
+import productRoute from "./routes/product.route";
 
 export interface AppError extends Error {
   status?: number;
@@ -25,6 +26,7 @@ app.use(
 // Routes
 app.use("/auth", authRoute);
 app.use("/users", userRoute);
+app.use("/products", productRoute);
 
 // Global error handler (should be after routes)
 app.use((err: AppError, req: Request, res: Response, next: NextFunction) => {

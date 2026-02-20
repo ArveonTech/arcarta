@@ -28,6 +28,18 @@ export const findUserByEmail = async (email: string): Promise<User> => {
   return result.rows[0];
 };
 
+export const getUserRoleById = async (userId: number) => {
+  const result = await pool.query(`SELECT role FROM auth.users WHERE id = $1`, [
+    userId,
+  ]);
+
+  if (result.rows.length === 0) {
+    return null;
+  }
+
+  return result.rows[0].role;
+};
+
 export const getProfile = async (userId: string) => {
   const profile = await pool.query<Profile>(
     "Select * from auth.profiles where user_id=$1",

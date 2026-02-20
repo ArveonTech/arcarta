@@ -3,6 +3,7 @@ import "express";
 declare global {
   namespace Express {
     interface Request {
+      file?: Express.Multer.File;
       status?: "ok" | "refresh";
       refreshToken?: string;
       accessToken?: string;

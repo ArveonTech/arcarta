@@ -15,3 +15,4 @@ class Template extends Error {
 export class DatabaseError extends Template {}
 export class AuthError extends Template {}
 export class UserError extends Template {}
+export class ProductError extends Template {}

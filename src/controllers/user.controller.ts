@@ -29,10 +29,8 @@ export const verifyUser = async (
       });
     }
     next();
-  } catch (error: any) {
-    return res.status(404).json({
-      message: error.message,
-    });
+  } catch (error) {
+    next(error);
   }
 };
 
@@ -43,8 +41,6 @@ export const handleMe = async (
 ) => {
   try {
     const { accessToken, refreshToken, status, user } = req;
-
-    console.info(user);
 
     if (!user) {
       return res.status(404).json({
@@ -161,8 +157,6 @@ export const handleChangeProfile = async (
       maxAge: 1000 * 60 * 60 * 168,
       path: "/",
     });
-
-    console.info(data.profile);
 
     res.status(200).json({
       status: "success",
