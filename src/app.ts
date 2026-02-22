@@ -5,6 +5,8 @@ import { type Request, type Response, type NextFunction } from "express";
 import authRoute from "./routes/auth.route";
 import userRoute from "./routes/user.route";
 import productRoute from "./routes/product.route";
+import reviewRoute from "./routes/reviews.route";
+import cartRoute from "./routes/cart.route";
 
 export interface AppError extends Error {
   status?: number;
@@ -27,6 +29,8 @@ app.use(
 app.use("/auth", authRoute);
 app.use("/users", userRoute);
 app.use("/products", productRoute);
+app.use("/reviews", reviewRoute);
+app.use("/carts", cartRoute);
 
 // Global error handler (should be after routes)
 app.use((err: AppError, req: Request, res: Response, next: NextFunction) => {

@@ -3,6 +3,7 @@ import {
   changeProfileOrPassword,
   findUserById,
   getProfile,
+  getUsers,
 } from "../services/user.service";
 import { UserError } from "../middlewares/errorHandler";
 import { getPayloadJWT } from "../services/auth.service";
@@ -177,7 +178,34 @@ export const handleChangeProfile = async (
     next(
       new UserError({
         message:
-          error instanceof Error ? error.message : "Error verify register",
+          error instanceof Error ? error.message : "Error change profile",
+        statusCode: 400,
+      }),
+    );
+  }
+};
+
+export const handleGetUsers = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const dataUsers = await getUsers();
+
+    res.status(200).json({
+      status: "success",
+      code: 200,
+      message: "Change profile success",
+      data: {
+        dataUsers,
+      },
+    });
+  } catch (error) {
+    console.info(error);
+    next(
+      new UserError({
+        message: error instanceof Error ? error.message : "Error get user",
         statusCode: 400,
       }),
     );

@@ -60,20 +60,53 @@ export const getProductById = async (id: number): Promise<Product> => {
   const query = `
     SELECT
       p.*,
-      COALESCE(
-        json_agg(
-          json_build_object(
-            'id', i.id,
-            'src', i.src
-          )
-        ) FILTER (WHERE i.id IS NOT NULL),
-        '[]'
-      ) AS images
+      (
+        SELECT COALESCE(
+          json_agg(
+            json_build_object(
+              'id', i.id,
+              'src', i.src
+            )
+          ),
+          '[]'
+        )
+        FROM catalog.images i
+        WHERE i.product_id = p.id
+      ) AS images,
+      (
+        SELECT COALESCE(
+          json_agg(
+            json_build_object(
+              'id', r.id,
+              'review_text', r.review_text,
+              'rating', r.rating,
+              'created_at', r.created_at,
+              'user', json_build_object(
+                'id', u.id,
+                'email', u.email
+              )
+            )
+          ),
+          '[]'
+        )
+        FROM catalog.reviews r
+        LEFT JOIN auth.users u
+          ON u.id = r.user_id
+        WHERE r.product_id = p.id
+      ) AS reviews,
+      (
+        SELECT COALESCE(AVG(r.rating), 0)
+        FROM catalog.reviews r
+        WHERE r.product_id = p.id
+      ) AS avg_rating,
+      (
+        SELECT COUNT(*)
+        FROM catalog.reviews r
+        WHERE r.product_id = p.id
+      ) AS total_reviews
+
     FROM catalog.products p
-    LEFT JOIN catalog.images i
-      ON i.product_id = p.id
     WHERE p.id = $1
-    GROUP BY p.id
   `;
 
   const result = await pool.query(query, [id]);
@@ -149,7 +182,7 @@ export const updateProduct = async (
 ): Promise<Product> => {
   const result = await pool.query(
     `UPDATE catalog.products
-     SET name = $1, price = $2, category_id=$3, description=$4
+     SET name = $1, price = $2, category_id=$3, description=$4 updated_at=NOW()
      WHERE id = $5
      RETURNING *`,
     [data.name, data.price, data.category_id, data.description, id],

@@ -5,7 +5,7 @@ import { pool } from "../database/db";
 import path from "path";
 import fs from "fs/promises";
 
-export const getProducts = async (
+export const handleGetProducts = async (
   req: Request,
   res: Response,
   next: NextFunction,
@@ -29,7 +29,7 @@ export const getProducts = async (
 
     const products = await productService.getAllProducts(filters);
 
-    res.json({
+    res.status(200).json({
       status: "success",
       code: 200,
       message: "Get products success",
@@ -46,7 +46,7 @@ export const getProducts = async (
   }
 };
 
-export const getProduct = async (
+export const handleGetProduct = async (
   req: Request,
   res: Response,
   next: NextFunction,
@@ -80,7 +80,7 @@ export const getProduct = async (
   }
 };
 
-export const insertProduct = async (
+export const handleInsertProduct = async (
   req: Request,
   res: Response,
   next: NextFunction,
@@ -102,7 +102,7 @@ export const insertProduct = async (
 
     res.status(201).json({
       status: "success",
-      code: 200,
+      code: 201,
       message: "Add product success",
       data: data.product,
     });
@@ -117,7 +117,7 @@ export const insertProduct = async (
   }
 };
 
-export const updateProduct = async (
+export const handleUpdateProduct = async (
   req: Request,
   res: Response,
   next: NextFunction,
@@ -126,14 +126,14 @@ export const updateProduct = async (
     const id = Number(req.params.id);
 
     await pool.query("BEGIN");
-    const updatedProduct = await productService.updateProduct(id, {
+    const resultUpdatedProduct = await productService.updateProduct(id, {
       name: req.body.name,
       price: Number(req.body.price),
       category_id: Number(req.body.category_id),
       description: req.body.description,
     });
 
-    if (!updatedProduct) {
+    if (!resultUpdatedProduct) {
       return res.status(404).json({ message: "Product not found" });
     }
 
@@ -142,7 +142,7 @@ export const updateProduct = async (
         status: "success",
         code: 200,
         message: "update product success",
-        data: updateProduct,
+        data: resultUpdatedProduct,
       });
     }
 
@@ -168,11 +168,12 @@ export const updateProduct = async (
     }
 
     await pool.query("COMMIT");
+
     return res.status(200).json({
       status: "success",
       code: 200,
       message: "update product success",
-      data: updateProduct,
+      data: resultUpdatedProduct,
     });
   } catch (error) {
     console.info(error);
@@ -197,7 +198,7 @@ export const updateProduct = async (
   }
 };
 
-export const removeProduct = async (
+export const handleRemoveProduct = async (
   req: Request,
   res: Response,
   next: NextFunction,
@@ -215,9 +216,11 @@ export const removeProduct = async (
         message: message,
       });
 
-    res.json({
+    res.status(200).json({
       status: "success",
+      code: 200,
       message: "Product deleted success",
+      data: null,
     });
   } catch (error) {
     console.info(error);

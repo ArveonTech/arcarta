@@ -82,6 +82,7 @@ export const changeProfileOrPassword = async (
       `UPDATE auth.users
        SET password = $1
        WHERE id = $2
+       updated_at=NOW()
        RETURNING *`,
       [value, user.id],
     );
@@ -129,4 +130,19 @@ export const changeProfileOrPassword = async (
       profile,
     },
   };
+};
+
+export const getUsers = async () => {
+  const resultGetUser = await pool.query<User>(
+    "SELECT auth.users.id, auth.users.email, auth.users.role, auth.profiles.full_name, auth.profiles.avatar from auth.users join auth.profiles on auth.profiles.user_id=auth.users.id order by case when auth.users.role = 'admin' then 1 when auth.users.role = 'user' then 2 else 3 end",
+  );
+
+  if (
+    resultGetUser.rows.length === 0 ||
+    typeof resultGetUser.rows[0] === "undefined"
+  ) {
+    throw new Error("Users not found");
+  }
+
+  return resultGetUser.rows;
 };

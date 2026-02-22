@@ -1,39 +1,48 @@
 import express from "express";
 import { verifyToken } from "../middlewares/auth.middleware";
 import {
-  getProduct,
-  getProducts,
-  insertProduct,
-  removeProduct,
-  updateProduct,
+  handleGetProduct,
+  handleGetProducts,
+  handleInsertProduct,
+  handleRemoveProduct,
+  handleUpdateProduct,
 } from "../controllers/product.controller";
 import { requireAdmin } from "../middlewares/role.middleare";
 import { uploadMiddleware } from "../middlewares/upload.middleware";
+import { verifyUser } from "../controllers/user.controller";
 
 const app = express();
 app.use(express.json());
 const productRoute = express.Router();
 
-productRoute.get("/", verifyToken, getProducts);
+productRoute.get("", verifyToken, verifyUser, handleGetProducts);
 
-productRoute.get("/:id", verifyToken, getProduct);
+productRoute.get("/:id", verifyToken, verifyUser, handleGetProduct);
 
 productRoute.post(
   "/",
   verifyToken,
+  verifyUser,
   requireAdmin,
   uploadMiddleware,
-  insertProduct,
+  handleInsertProduct,
 );
 
 productRoute.put(
   "/:id",
   verifyToken,
+  verifyUser,
   requireAdmin,
   uploadMiddleware,
-  updateProduct,
+  handleUpdateProduct,
 );
 
-productRoute.delete("/:id", verifyToken, requireAdmin, removeProduct);
+productRoute.delete(
+  "/:id",
+  verifyToken,
+  verifyUser,
+  requireAdmin,
+  handleRemoveProduct,
+);
 
 export default productRoute;
