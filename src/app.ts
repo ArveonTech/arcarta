@@ -7,6 +7,7 @@ import userRoute from "./routes/user.route";
 import productRoute from "./routes/product.route";
 import reviewRoute from "./routes/reviews.route";
 import cartRoute from "./routes/cart.route";
+import orderRoute from "./routes/order.route";
 
 export interface AppError extends Error {
   status?: number;
@@ -31,12 +32,13 @@ app.use("/users", userRoute);
 app.use("/products", productRoute);
 app.use("/reviews", reviewRoute);
 app.use("/carts", cartRoute);
+app.use("/orders", orderRoute);
 
 // Global error handler (should be after routes)
 app.use((err: AppError, req: Request, res: Response, next: NextFunction) => {
   const status = err?.statusCode || 500;
   console.info(err);
-  const message = err?.isOperational ? err.message : "Something went wrong";
+  const message = "Something went wrong";
 
   res.status(status).json({
     status: "error",

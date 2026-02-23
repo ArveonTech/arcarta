@@ -18,3 +18,4 @@ export class UserError extends Template {}
 export class ProductError extends Template {}
 export class ReviewsError extends Template {}
 export class CartError extends Template {}
+export class OrderError extends Template {}

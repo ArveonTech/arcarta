@@ -266,6 +266,13 @@ export const handleRequestOTPRegister = async (
 
     const user = await findUserById(dataUser.id);
 
+    if (user.is_verified)
+      return res.status(404).json({
+        status: "error",
+        code: 404,
+        message: "User has been verified",
+      });
+
     const { statusOTP, message } = await requestOTP({
       userId: user.id,
       secret: user.secret,
@@ -480,6 +487,13 @@ export const handleRequestOTPLogin = async (
     }
 
     const user = await findUserById(dataUser.id);
+
+    if (user.is_verified)
+      return res.status(404).json({
+        status: "error",
+        code: 404,
+        message: "User has been verified",
+      });
 
     const { statusOTP, message } = await requestOTP({
       userId: user.id,
